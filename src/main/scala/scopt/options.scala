@@ -79,21 +79,21 @@ object Read {
     val reads = { (s: String) => () }
   }
 
-  val sep = ","
+  val sep = "(?<=(?<!\\\\)(\\\\\\\\)?),"
 
   // reads("1,2,3,4,5") == Seq(1,2,3,4,5)
   implicit def seqRead[A: Read]: Read[Seq[A]] = reads { (s: String) =>
-    s.split(sep).map(implicitly[Read[A]].reads)
+    s.split(sep).map(_.replaceAll("\\\\,", ",").replaceAll("\\\\\\\\", "\\\\")).map(implicitly[Read[A]].reads)
   }
 
   // reads("1=false,2=true") == Map(1 -> false, 2 -> true)
   implicit def mapRead[K: Read, V: Read]: Read[Map[K,V]] = reads { (s: String) =>
-    s.split(sep).map(implicitly[Read[(K,V)]].reads).toMap
+    s.split(sep).map(_.replaceAll("\\\\,", ",").replaceAll("\\\\\\\\", "\\\\")).map(implicitly[Read[(K,V)]].reads).toMap
   }
 
   // reads("1=false,1=true") == List((1 -> false), (1 -> true))
   implicit def seqTupleRead[K: Read, V: Read]: Read[Seq[(K,V)]] = reads { (s: String) =>
-    s.split(sep).map(implicitly[Read[(K,V)]].reads).toSeq
+    s.split(sep).map(_.replaceAll("\\\\,", ",").replaceAll("\\\\\\\\", "\\\\")).map(implicitly[Read[(K,V)]].reads).toSeq
   }
 }
 

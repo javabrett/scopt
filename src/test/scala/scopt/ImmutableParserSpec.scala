@@ -93,13 +93,22 @@ class ImmutableParserSpec extends Specification { def is = args(sequential = tru
     parse Seq(1,2,3) out of "--foo=1,2,3"                       ${seqParser("--foo=1,2,3")}
     fail to parse --foo                                         ${seqParserFail("--foo")}
 
+  opt[Seq[String]]("bar") action { x => x } should
+    parse Seq("1","2,3","4") out of --bar "1,2\,3,4"            ${seqParserEscaped(Seq("1", "2,3", "4"), "--bar","1,2\\,3,4")}
+    parse Seq("1","2\","3","4") out of --bar "1,2\\,3,4"        ${seqParserEscaped(Seq("1", "2\\", "3", "4"), "--bar","1,2\\\\,3,4")}
+    parse Seq("1","2\","3","4") out of --bar "1,2\\,3,4"        ${seqParserEscaped(Seq("1", "2\\", "3", "4"), "--bar","1,2\\\\,3,4")}
+    parse Seq("1","2\","3\\,4") out of --bar "1,2\\,3\\\\\,4"   ${seqParserEscaped(Seq("1", "2\\", "3\\\\,4"), "--bar","1,2\\\\,3\\\\\\\\\\,4")}
+
   opt[Map[String,Boolean]]("foo") action { x => x } should
-    parse Map("true" -> true, "false" -> false) out of --foo "true=true,false=false" ${mapParser("--foo","true=true,false=false")}
-    parse Map("true" -> true, "false" -> false) out of "--foo=true=true,false=false" ${mapParser("--foo=true=true,false=false")}
+    parse Map("true" -> true, "false" -> false) out of --foo "true=true,false=false" ${mapParser(Map("true" -> true,"false" -> false), "--foo","true=true,false=false")}
+    parse Map("true" -> true, "false" -> false) out of "--foo=true=true,false=false" ${mapParser(Map("true" -> true,"false" -> false), "--foo=true=true,false=false")}
+    parse Map("true," -> true, "false,untrue" -> false) out of "--foo=true\,=true,false\,untrue=false" ${mapParser(Map("true," -> true,"false,untrue" -> false), "--foo=true\\,=true,false\\,untrue=false")}
+    parse Map("true\\," -> true, "false,untrue" -> false) out of "--foo=true\\\\\,=true,false\,untrue=false" ${mapParser(Map("true\\\\," -> true,"false,untrue" -> false), "--foo=true\\\\\\\\\\,=true,false\\,untrue=false")}
     fail to parse --foo                                         ${mapParserFail("foo")}
 
   opt[Seq[(String,Srting)]]("foo") action { x => x } should
-    parse Map("key" -> "1", "key" -> "2") out of --foo "key=1,false=false" ${seqTupleParser("--foo","key=1,key=2")}
+    parse Map("key" -> "1", "key" -> "2") out of --foo "key=1,false=false" ${seqTupleParser(List[(String, String)]("key" -> "1","key" -> "2"), "--foo","key=1,key=2")}
+    parse Map("key\,largo" -> "1", "key" -> "2\,") out of --foo "key=1,false=false" ${seqTupleParser(List[(String, String)]("key,largo" -> "1","key" -> "2,"), "--foo","key\\,largo=1,key=2\\,")}
     fail to parse --foo                                         ${seqTupleParserFail("foo")}
 
   opt[String]("foo") required() action { x => x } should
@@ -337,6 +346,15 @@ class ImmutableParserSpec extends Specification { def is = args(sequential = tru
     val result = seqParser1.parse(args.toSeq, Config())
     result.get.seqInts === Seq(1,2,3)
   }
+  val seqParserEscaped1 = new scopt.OptionParser[Config]("scopt") {
+    head("scopt", "3.x")
+    opt[Seq[String]]("bar") action { case (s, c) => c.copy(seqStrings = s) }
+    help("help")
+  }
+  def seqParserEscaped(expect: Seq[String], args: String*) = {
+    val result = seqParserEscaped1.parse(args.toSeq, Config())
+    result.get.seqStrings === expect
+  }
   def seqParserFail(args: String*) = {
     val result = seqParser1.parse(args.toSeq, Config())
     result === None
@@ -347,9 +365,9 @@ class ImmutableParserSpec extends Specification { def is = args(sequential = tru
     opt[Map[String,Boolean]]("foo") action { case (s, c) => c.copy(mapStringToBool = s) }
     help("help")
   }
-  def mapParser(args: String*) = {
+  def mapParser(expected: Map[String,Boolean], args: String*) = {
     val result = mapParser1.parse(args.toSeq, Config())
-    result.get.mapStringToBool === Map("true" -> true,"false" -> false)
+    result.get.mapStringToBool === expected
   }
   def mapParserFail(args: String*) = {
     val result = mapParser1.parse(args.toSeq, Config())
@@ -360,9 +378,9 @@ class ImmutableParserSpec extends Specification { def is = args(sequential = tru
     opt[Seq[(String,String)]]("foo") action { case (s, c) => c.copy(seqTupleStringString = s) }
     help("help")
   }
-  def seqTupleParser(args: String*) = {
+  def seqTupleParser(expected: List[(String, String)], args: String*) = {
     val result = seqTupleParser1.parse(args.toSeq, Config())
-    result.get.seqTupleStringString === List("key" -> "1","key" -> "2")
+    result.get.seqTupleStringString === expected
   }
   def seqTupleParserFail(args: String*) = {
     val result = seqTupleParser1.parse(args.toSeq, Config())
@@ -630,6 +648,7 @@ Usage: scopt [options]
     durationValue: Duration = Duration("0s"),
     key: String = "", a: String = "", b: String = "",
     seqInts: Seq[Int] = Seq(),
+    seqStrings: Seq[String] = Seq(),
     mapStringToBool: Map[String,Boolean] = Map(),
     seqTupleStringString: Seq[(String, String)] = Nil)
 }
